@@ -6,7 +6,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"golang.org/x/crypto/bcrypt"
-	"service/pkg/jwt/symmetric"
+	"service/pkg/jwt/asymmetric"
 	"time"
 )
 
@@ -21,19 +21,20 @@ const (
 
 type Service struct {
 	pool          *pgxpool.Pool
-	secretKey     []byte
+	privateKey    []byte
+	publicKey     []byte
 	tokenLifeTime time.Duration
 }
 
-func NewService(pool *pgxpool.Pool, secretKey []byte, tokenLifeTime time.Duration) *Service {
-	return &Service{pool: pool, tokenLifeTime: tokenLifeTime, secretKey: secretKey}
+func NewService(pool *pgxpool.Pool, privateKey []byte, publicKey []byte, tokenLifeTime time.Duration) *Service {
+	return &Service{pool: pool, privateKey: privateKey, publicKey: publicKey, tokenLifeTime: tokenLifeTime}
 }
 
 // Возвращает профиль пользователя по id
 func (s *Service) UserDetails(ctx context.Context, id *string) (interface{}, error) {
 	// Теперь можем не ходить в БД
 	token := *id
-	ok, err := symmetric.Verify(token, s.secretKey)
+	ok, err := asymmetric.Verify(token, s.publicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -42,12 +43,12 @@ func (s *Service) UserDetails(ctx context.Context, id *string) (interface{}, err
 	}
 
 	var userDetails UserDetails
-	err = symmetric.Decode(token, &userDetails)
+	err = asymmetric.Decode(token, &userDetails)
 	if err != nil {
 		return nil, err
 	}
 
-	if !symmetric.IsNotExpired(userDetails.Expire, time.Now()) {
+	if !asymmetric.IsNotExpired(userDetails.Expire, time.Now()) {
 		return nil, ErrExpiredToken
 	}
 
@@ -94,7 +95,7 @@ func (s *Service) Register(ctx context.Context, login string, password string) (
 		Issued: now.Unix(),
 		Expire: now.Add(s.tokenLifeTime).Unix(),
 	}
-	token, err := symmetric.Encode(details, s.secretKey)
+	token, err := asymmetric.Encode(details, s.privateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +135,7 @@ func (s *Service) Login(ctx context.Context, login string, password string) (*st
 		Issued: now.Unix(),
 		Expire: now.Add(s.tokenLifeTime).Unix(),
 	}
-	token, err := symmetric.Encode(details, s.secretKey)
+	token, err := asymmetric.Encode(details, s.privateKey)
 	if err != nil {
 		return nil, err
 	}

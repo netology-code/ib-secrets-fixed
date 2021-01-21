@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"github.com/go-chi/chi"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"io/ioutil"
@@ -50,24 +49,25 @@ func main() {
 
 	tokenLifeTime := time.Hour
 
-	keyBytes, err := ioutil.ReadFile("keys/symmetric.key")
-	if err != nil {
-		log.Print(err)
-		os.Exit(1)
-	}
-	secretKey, err := base64.StdEncoding.DecodeString(string(keyBytes))
+	privateKey, err := ioutil.ReadFile("keys/private.key")
 	if err != nil {
 		log.Print(err)
 		os.Exit(1)
 	}
 
-	if err := execute(net.JoinHostPort(host, port), dsn, secretKey, tokenLifeTime); err != nil {
+	publicKey, err := ioutil.ReadFile("keys/public.key")
+	if err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
+
+	if err := execute(net.JoinHostPort(host, port), dsn, privateKey, publicKey, tokenLifeTime); err != nil {
 		log.Print(err)
 		os.Exit(1)
 	}
 }
 
-func execute(addr string, dsn string, secretKey []byte, tokenLifeTime time.Duration) error {
+func execute(addr string, dsn string, privateKey, publicKey []byte, tokenLifeTime time.Duration) error {
 	ctx := context.Background()
 	pool, err := pgxpool.Connect(ctx, dsn)
 	if err != nil {
@@ -76,7 +76,7 @@ func execute(addr string, dsn string, secretKey []byte, tokenLifeTime time.Durat
 	}
 	defer pool.Close()
 
-	securitySvc := security.NewService(pool, secretKey, tokenLifeTime)
+	securitySvc := security.NewService(pool, privateKey, publicKey, tokenLifeTime)
 	businessSvc := business.NewService(pool)
 	router := chi.NewRouter()
 	application := app.NewServer(securitySvc, businessSvc, router)
