@@ -5,8 +5,8 @@ services:
     ports:
       - 5432:5432
     environment:
-      - POSTGRES_PASSWORD=pass
       - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=pass
       - POSTGRES_DB=db
     volumes:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
